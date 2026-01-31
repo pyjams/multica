@@ -6,6 +6,7 @@ import { resolveModel, resolveTools } from "./tools.js";
 import { SessionManager } from "./session/session-manager.js";
 import { ProfileManager } from "./profile/index.js";
 import { SkillManager } from "./skills/index.js";
+import { credentialManager, getCredentialsPath } from "./credentials.js";
 import {
   checkContextWindow,
   DEFAULT_CONTEXT_TOKENS,
@@ -19,28 +20,7 @@ import { mergeToolsConfig, type ToolsConfig } from "./tools/policy.js";
  */
 function resolveApiKey(provider: string, explicitKey?: string): string | undefined {
   if (explicitKey) return explicitKey;
-
-  const providerEnvMap: Record<string, string> = {
-    openai: "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    google: "GOOGLE_API_KEY",
-    "google-genai": "GOOGLE_API_KEY",
-    kimi: "MOONSHOT_API_KEY",
-    "kimi-coding": "MOONSHOT_API_KEY",
-    deepseek: "DEEPSEEK_API_KEY",
-    groq: "GROQ_API_KEY",
-    mistral: "MISTRAL_API_KEY",
-    together: "TOGETHER_API_KEY",
-  };
-
-  const envVar = providerEnvMap[provider];
-  if (envVar) {
-    return process.env[envVar];
-  }
-
-  // Try generic format: PROVIDER_API_KEY
-  const normalizedProvider = provider.toUpperCase().replace(/-/g, "_");
-  return process.env[`${normalizedProvider}_API_KEY`];
+  return credentialManager.getLlmProviderConfig(provider)?.apiKey;
 }
 
 /**
@@ -49,28 +29,7 @@ function resolveApiKey(provider: string, explicitKey?: string): string | undefin
  */
 function resolveBaseUrl(provider: string, explicitUrl?: string): string | undefined {
   if (explicitUrl) return explicitUrl;
-
-  const providerEnvMap: Record<string, string> = {
-    openai: "OPENAI_BASE_URL",
-    anthropic: "ANTHROPIC_BASE_URL",
-    google: "GOOGLE_BASE_URL",
-    "google-genai": "GOOGLE_BASE_URL",
-    kimi: "MOONSHOT_BASE_URL",
-    "kimi-coding": "MOONSHOT_BASE_URL",
-    deepseek: "DEEPSEEK_BASE_URL",
-    groq: "GROQ_BASE_URL",
-    mistral: "MISTRAL_BASE_URL",
-    together: "TOGETHER_BASE_URL",
-  };
-
-  const envVar = providerEnvMap[provider];
-  if (envVar) {
-    return process.env[envVar];
-  }
-
-  // Try generic format: PROVIDER_BASE_URL
-  const normalizedProvider = provider.toUpperCase().replace(/-/g, "_");
-  return process.env[`${normalizedProvider}_BASE_URL`];
+  return credentialManager.getLlmProviderConfig(provider)?.baseUrl;
 }
 
 /**
@@ -79,28 +38,7 @@ function resolveBaseUrl(provider: string, explicitUrl?: string): string | undefi
  */
 function resolveModelId(provider: string, explicitModel?: string): string | undefined {
   if (explicitModel) return explicitModel;
-
-  const providerEnvMap: Record<string, string> = {
-    openai: "OPENAI_MODEL",
-    anthropic: "ANTHROPIC_MODEL",
-    google: "GOOGLE_MODEL",
-    "google-genai": "GOOGLE_MODEL",
-    kimi: "MOONSHOT_MODEL",
-    "kimi-coding": "MOONSHOT_MODEL",
-    deepseek: "DEEPSEEK_MODEL",
-    groq: "GROQ_MODEL",
-    mistral: "MISTRAL_MODEL",
-    together: "TOGETHER_MODEL",
-  };
-
-  const envVar = providerEnvMap[provider];
-  if (envVar) {
-    return process.env[envVar];
-  }
-
-  // Try generic format: PROVIDER_MODEL
-  const normalizedProvider = provider.toUpperCase().replace(/-/g, "_");
-  return process.env[`${normalizedProvider}_MODEL`];
+  return credentialManager.getLlmProviderConfig(provider)?.model;
 }
 
 export class Agent {
@@ -122,7 +60,7 @@ export class Agent {
     this.debug = options.debug ?? false;
 
     // Resolve provider and model from options > env vars > defaults
-    const resolvedProvider = options.provider ?? process.env.LLM_PROVIDER ?? "kimi-coding";
+    const resolvedProvider = options.provider ?? credentialManager.getLlmProvider() ?? "kimi-coding";
     const resolvedModel = resolveModelId(resolvedProvider, options.model);
     const apiKey = resolveApiKey(resolvedProvider, options.apiKey);
 
@@ -181,8 +119,7 @@ export class Agent {
     if (!model) {
       throw new Error(
         `Unknown model: provider="${effectiveProvider}", model="${effectiveModel}". ` +
-        `Check your LLM_PROVIDER and model env vars (e.g. OPENAI_MODEL). ` +
-        `For OpenRouter, use LLM_PROVIDER=openrouter.`,
+        `Check ${getCredentialsPath()} for llm.provider and llm.providers.${effectiveProvider}.model.`,
       );
     }
 

@@ -35,45 +35,72 @@ skills/                 # Bundled skills (commit, code-review)
 pnpm install
 ```
 
-### Environment Configuration
+### Credentials Configuration
 
-The Agent requires LLM provider credentials. Copy the example and fill in your values:
+The Agent reads credentials from JSON5 files (no `.env` required).
+
+Create empty templates:
 
 ```bash
-cp .env.example .env
-# Edit .env with your API keys
+pnpm credentials:cli init
 ```
 
-Example `.env` for OpenAI:
+This creates:
 
-```bash
-export LLM_PROVIDER=openai
-export OPENAI_API_KEY=sk-xxx
-export OPENAI_BASE_URL=https://api.openai.com/v1
-export OPENAI_MODEL=gpt-4o
+- `~/.super-multica/credentials.json5` — core config (LLM providers + built-in tools)
+- `~/.super-multica/skills.env.json5` — dynamic keys (skills / plugins / integrations)
+
+Example `credentials.json5` (OpenAI):
+
+```json5
+{
+  version: 1,
+  llm: {
+    provider: "openai",
+    providers: {
+      openai: {
+        apiKey: "sk-xxx",
+        baseUrl: "https://api.openai.com/v1",
+        model: "gpt-4o"
+      }
+    }
+  },
+  tools: {
+    brave: { apiKey: "brv-..." }
+  }
+}
 ```
 
-Load the environment before starting services that use the Agent:
+Example `skills.env.json5` (dynamic keys):
+
+```json5
+{
+  env: {
+    LINEAR_API_KEY: "lin-...",
+    SLACK_BOT_TOKEN: "xoxb-..."
+  }
+}
+```
+
+Start services directly (no `source .env`):
 
 ```bash
-# Hub Console (requires LLM env vars)
-source .env && pnpm dev:console
-
-# Agent CLI
-source .env && pnpm agent:cli "hello"
-
-# Gateway (no LLM env vars needed)
+pnpm dev:console
+pnpm agent:cli "hello"
 pnpm dev:gateway
 ```
 
-See `.env.example` for all supported providers (OpenAI, Anthropic, DeepSeek, Kimi, Groq, Mistral, etc.).
+Optional overrides:
+
+- `SMC_CREDENTIALS_PATH` — custom path for `credentials.json5`
+- `SMC_SKILLS_ENV_PATH` — custom path for `skills.env.json5`
 
 ### Configuration Priority
 
 Each setting is resolved in order (first match wins):
 
 1. **CLI argument** — `--provider`, `--model`, `--api-key`, `--base-url`
-2. **Environment variable** — `LLM_PROVIDER`, `OPENAI_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, etc.
+2. **Credentials file** — `credentials.json5` (`llm.provider` + `llm.providers[provider]`)
 3. **Session metadata** — restored from previous session
 4. **Default** — `kimi-coding` provider with `kimi-k2-thinking` model
 

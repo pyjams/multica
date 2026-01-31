@@ -32,6 +32,7 @@ async function build() {
     { entry: "src/agent/cli/interactive.ts", outfile: "bin/multica-interactive.mjs" },
     { entry: "src/agent/cli/non-interactive.ts", outfile: "bin/multica-cli.mjs" },
     { entry: "src/agent/cli/profile.ts", outfile: "bin/multica-profile.mjs" },
+    { entry: "src/agent/credentials-cli.ts", outfile: "bin/multica-credentials.mjs" },
   ];
 
   for (const { entry, outfile } of entryPoints) {

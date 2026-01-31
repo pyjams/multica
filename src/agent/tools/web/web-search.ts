@@ -14,6 +14,7 @@ import {
 } from "./cache.js";
 import type { CacheEntry } from "./cache.js";
 import { jsonResult, readNumberParam, readStringParam } from "./param-helpers.js";
+import { credentialManager } from "../../credentials.js";
 
 const SEARCH_PROVIDERS = ["brave", "perplexity"] as const;
 type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
@@ -178,21 +179,21 @@ function inferPerplexityBaseUrl(apiKey: string): string {
 }
 
 function resolvePerplexityApiKey(): { apiKey: string; source: string } | { apiKey: null; source: "none" } {
-  const perplexityKey = (process.env.PERPLEXITY_API_KEY ?? "").trim();
+  const perplexityKey = (credentialManager.getToolConfig("perplexity")?.apiKey ?? "").trim();
   if (perplexityKey) {
-    return { apiKey: perplexityKey, source: "PERPLEXITY_API_KEY" };
+    return { apiKey: perplexityKey, source: "perplexity" };
   }
 
-  const openrouterKey = (process.env.OPENROUTER_API_KEY ?? "").trim();
+  const openrouterKey = (credentialManager.getToolConfig("openrouter")?.apiKey ?? "").trim();
   if (openrouterKey) {
-    return { apiKey: openrouterKey, source: "OPENROUTER_API_KEY" };
+    return { apiKey: openrouterKey, source: "openrouter" };
   }
 
   return { apiKey: null, source: "none" };
 }
 
 function resolveBraveApiKey(): string | undefined {
-  return (process.env.BRAVE_API_KEY ?? "").trim() || undefined;
+  return (credentialManager.getToolConfig("brave")?.apiKey ?? "").trim() || undefined;
 }
 
 function resolveProvider(requested?: string): SearchProvider {
@@ -340,24 +341,26 @@ async function runWebSearch(params: {
       return {
         error: "missing_api_key",
         message:
-          "Perplexity search requires PERPLEXITY_API_KEY or OPENROUTER_API_KEY environment variable.",
+          "Perplexity search requires tools.perplexity.apiKey (or tools.openrouter.apiKey) in credentials.json5.",
       };
     }
 
     const apiKey = perplexityResult.apiKey;
-    const baseUrl = inferPerplexityBaseUrl(apiKey);
+    const perplexityConfig = credentialManager.getToolConfig("perplexity");
+    const baseUrl = (perplexityConfig?.baseUrl ?? "").trim() || inferPerplexityBaseUrl(apiKey);
+    const model = (perplexityConfig?.model ?? "").trim() || DEFAULT_PERPLEXITY_MODEL;
     const { content, citations } = await runPerplexitySearch({
       query: params.query,
       apiKey,
       baseUrl,
-      model: DEFAULT_PERPLEXITY_MODEL,
+      model,
       timeoutSeconds: params.timeoutSeconds,
     });
 
     const payload = {
       query: params.query,
       provider: params.provider,
-      model: DEFAULT_PERPLEXITY_MODEL,
+      model,
       tookMs: Date.now() - start,
       content,
       citations,
@@ -371,7 +374,7 @@ async function runWebSearch(params: {
   if (!apiKey) {
     return {
       error: "missing_api_key",
-      message: "Brave search requires BRAVE_API_KEY environment variable.",
+      message: "Brave search requires tools.brave.apiKey in credentials.json5.",
     };
   }
 

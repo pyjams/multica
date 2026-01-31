@@ -22,6 +22,7 @@ import {
   checkEligibilityDetailed,
   type DiagnosticItem,
 } from "../skills/index.js";
+import { credentialManager } from "../credentials.js";
 
 // ============================================================================
 // Types
@@ -365,7 +366,7 @@ function checkBinaries(bins: string[]): Map<string, boolean> {
 function checkEnvVars(envs: string[]): Map<string, boolean> {
   const result = new Map<string, boolean>();
   for (const env of envs) {
-    result.set(env, env in process.env);
+    result.set(env, credentialManager.hasEnv(env));
   }
   return result;
 }

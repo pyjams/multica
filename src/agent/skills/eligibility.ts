@@ -19,6 +19,7 @@ import {
   normalizeRequirements,
   normalizePlatforms,
 } from "./types.js";
+import { credentialManager, getSkillsEnvPath } from "../credentials.js";
 
 // ============================================================================
 // Diagnostic Types
@@ -77,7 +78,7 @@ export function binaryExists(binary: string): boolean {
  * @returns True if set (even if empty string)
  */
 function envExists(envVar: string): boolean {
-  return envVar in process.env;
+  return credentialManager.hasEnv(envVar);
 }
 
 // ============================================================================
@@ -450,7 +451,7 @@ function generateEnvHint(envVars: string[], skill: Skill): string {
     // Check for well-known API key patterns
     if (envVar.endsWith("_API_KEY") || envVar.endsWith("_KEY")) {
       const service = envVar.replace(/_API_KEY$|_KEY$/, "").toLowerCase();
-      hints.push(`Set ${envVar} in your environment or add to .env file`);
+      hints.push(`Set ${envVar} in your environment or add to ${getSkillsEnvPath()}`);
 
       // Add provider-specific hints
       const providerHint = getApiKeyHint(envVar);

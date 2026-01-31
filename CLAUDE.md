@@ -73,14 +73,17 @@ Frontend (web:3001 / desktop)
 - **Backend**: NestJS 11, Socket.io, Pino logging
 - **CLI bundling**: esbuild → `bin/` directory
 
-## Environment Setup
+## Credentials Setup
+
+Use JSON5 credential files instead of `.env`:
 
 ```bash
-cp .env.example .env
-# Set LLM_PROVIDER and corresponding API keys
-# Supported: openai, anthropic, deepseek, kimi-coding, groq, mistral, together, google
-# .env is loaded automatically via --env-file in all dev/agent scripts
+pnpm credentials:cli init
 ```
+
+This creates:
+- `~/.super-multica/credentials.json5` (LLM providers + built-in tools)
+- `~/.super-multica/skills.env.json5` (skills / plugins / integrations)
 
 ## Atomic Commits
 

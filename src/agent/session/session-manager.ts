@@ -3,6 +3,7 @@ import { getModel, type Model } from "@mariozechner/pi-ai";
 import type { SessionEntry, SessionMeta } from "./types.js";
 import { appendEntry, readEntries, writeEntries } from "./storage.js";
 import { compactMessages, compactMessagesAsync } from "./compaction.js";
+import { credentialManager } from "../credentials.js";
 
 /** Get Kimi model for summarization (use a cheaper model than k2-thinking) */
 function getSummaryModel(): Model<any> {
@@ -11,7 +12,12 @@ function getSummaryModel(): Model<any> {
 
 /** Get Kimi API key */
 function getSummaryApiKey(): string | undefined {
-  return process.env.KIMI_API_KEY ?? process.env.MOONSHOT_API_KEY;
+  const providers = ["kimi", "moonshot", "kimi-coding"];
+  for (const provider of providers) {
+    const apiKey = credentialManager.getLlmProviderConfig(provider)?.apiKey;
+    if (apiKey) return apiKey;
+  }
+  return undefined;
 }
 
 export type SessionManagerOptions = {
