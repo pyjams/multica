@@ -293,7 +293,7 @@ export function runCoalescedAnnounceFlow(
       return false;
     }
 
-    parentAgent.writeInternal(message, { forwardAssistant: true });
+    parentAgent.writeInternal(message, { forwardAssistant: true, persistResponse: true });
     return true;
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed to coalesced-announce to parent:`, err);
@@ -341,7 +341,7 @@ export function runSubagentAnnounceFlow(params: SubagentAnnounceParams): boolean
       return false;
     }
 
-    parentAgent.writeInternal(message, { forwardAssistant: true });
+    parentAgent.writeInternal(message, { forwardAssistant: true, persistResponse: true });
     return true;
   } catch (err) {
     console.error(`[SubagentAnnounce] Failed to announce to parent:`, err);

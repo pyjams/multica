@@ -563,6 +563,35 @@ export class Agent {
     return this._internalRun;
   }
 
+  /**
+   * Persist a synthetic assistant message into both in-memory state and session JSONL.
+   * Used after an internal run to keep the LLM summary visible in future turns
+   * while the internal prompt stays hidden.
+   */
+  persistAssistantSummary(text: string): void {
+    const model = this.agent.state.model;
+    const message = {
+      role: "assistant" as const,
+      content: [{ type: "text" as const, text }],
+      api: model?.api ?? "openai-completions",
+      provider: model?.provider ?? "internal",
+      model: model?.id ?? "unknown",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop" as const,
+      timestamp: Date.now(),
+    };
+
+    this.agent.appendMessage(message);
+    this.session.saveMessage(message);
+  }
+
   /** Ensure session messages are loaded from disk (idempotent) */
   async ensureInitialized(): Promise<void> {
     if (this.initialized) return;

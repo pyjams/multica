@@ -7,6 +7,7 @@ const internalRunState = { value: false };
 const runMock = vi.fn(async () => ({ text: "", thinking: undefined, error: undefined }));
 const runInternalMock = vi.fn(async () => ({ text: "", thinking: undefined, error: undefined }));
 const flushSessionMock = vi.fn(async () => {});
+const persistAssistantSummaryMock = vi.fn();
 const subscribeAllMock = vi.fn((fn: (event: any) => void) => {
   subscribeCallbacks.push(fn);
   return () => {};
@@ -19,6 +20,7 @@ vi.mock("./runner.js", () => ({
     run = runMock;
     runInternal = runInternalMock;
     flushSession = flushSessionMock;
+    persistAssistantSummary = persistAssistantSummaryMock;
     get isInternalRun() {
       return internalRunState.value;
     }
@@ -84,6 +86,7 @@ describe("AsyncAgent internal flow", () => {
     runMock.mockReset();
     runInternalMock.mockReset();
     flushSessionMock.mockReset();
+    persistAssistantSummaryMock.mockReset();
     subscribeAllMock.mockClear();
     runMock.mockResolvedValue({ text: "", thinking: undefined, error: undefined });
     runInternalMock.mockResolvedValue({ text: "", thinking: undefined, error: undefined });
@@ -205,6 +208,57 @@ describe("AsyncAgent internal flow", () => {
     resolveRunInternal!({ text: "", thinking: undefined, error: undefined });
     await agent.waitForIdle();
     internalRunState.value = false;
+    agent.close();
+  });
+
+  it("persists assistant summary when persistResponse is true and result has text", async () => {
+    runInternalMock.mockResolvedValueOnce({ text: "Summary of findings", thinking: undefined, error: undefined });
+    const agent = new AsyncAgent();
+
+    agent.writeInternal("announce findings", { forwardAssistant: true, persistResponse: true });
+    await agent.waitForIdle();
+
+    expect(persistAssistantSummaryMock).toHaveBeenCalledOnce();
+    expect(persistAssistantSummaryMock).toHaveBeenCalledWith("Summary of findings");
+    // flushSession called twice: once after runInternal, once after persistAssistantSummary
+    expect(flushSessionMock).toHaveBeenCalledTimes(2);
+
+    agent.close();
+  });
+
+  it("does not persist assistant summary when result text is NO_REPLY", async () => {
+    runInternalMock.mockResolvedValueOnce({ text: "NO_REPLY", thinking: undefined, error: undefined });
+    const agent = new AsyncAgent();
+
+    agent.writeInternal("announce findings", { forwardAssistant: true, persistResponse: true });
+    await agent.waitForIdle();
+
+    expect(persistAssistantSummaryMock).not.toHaveBeenCalled();
+
+    agent.close();
+  });
+
+  it("does not persist assistant summary when result text is empty", async () => {
+    runInternalMock.mockResolvedValueOnce({ text: "  ", thinking: undefined, error: undefined });
+    const agent = new AsyncAgent();
+
+    agent.writeInternal("announce findings", { forwardAssistant: true, persistResponse: true });
+    await agent.waitForIdle();
+
+    expect(persistAssistantSummaryMock).not.toHaveBeenCalled();
+
+    agent.close();
+  });
+
+  it("does not persist assistant summary when persistResponse is not set", async () => {
+    runInternalMock.mockResolvedValueOnce({ text: "Summary of findings", thinking: undefined, error: undefined });
+    const agent = new AsyncAgent();
+
+    agent.writeInternal("announce findings", { forwardAssistant: true });
+    await agent.waitForIdle();
+
+    expect(persistAssistantSummaryMock).not.toHaveBeenCalled();
+
     agent.close();
   });
 });

@@ -13,6 +13,8 @@ export type ChannelItem = Message | AgentEvent | MulticaEvent;
 export interface WriteInternalOptions {
   /** Forward assistant message_end events to realtime stream during internal runs */
   forwardAssistant?: boolean | undefined;
+  /** After internal run completes, persist the LLM's summary as a non-internal assistant message */
+  persistResponse?: boolean | undefined;
 }
 
 export class AsyncAgent {
@@ -74,6 +76,7 @@ export class AsyncAgent {
   writeInternal(content: string, options?: WriteInternalOptions): void {
     if (this._closed) throw new Error("Agent is closed");
     const forwardAssistant = options?.forwardAssistant === true;
+    const persistResponse = options?.persistResponse === true;
 
     this.queue = this.queue
       .then(async () => {
@@ -86,6 +89,11 @@ export class AsyncAgent {
           if (result.error) {
             // Internal run errors are for diagnostics only; do not leak to user stream.
             console.error(`[AsyncAgent] Internal run error: ${result.error}`);
+          }
+          // Persist the LLM summary so it remains in parent context for future turns
+          if (persistResponse && result.text?.trim() && result.text.trim() !== "NO_REPLY") {
+            this.agent.persistAssistantSummary(result.text.trim());
+            await this.agent.flushSession();
           }
         } finally {
           this.forwardInternalAssistant = prevForward;
