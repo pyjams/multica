@@ -1,12 +1,9 @@
 ---
 name: DCF Valuation
 description: Perform Discounted Cash Flow (DCF) valuation analysis for public companies. Use when the user asks to value a stock, calculate intrinsic value, fair value, perform DCF analysis, determine if a stock is undervalued or overvalued, or estimate a price target.
-version: 1.1.0
+version: 1.1.1
 metadata:
   emoji: "\U0001F9EE"
-  requires:
-    env:
-      - FINANCIAL_DATASETS_API_KEY
   tags:
     - finance
     - valuation
