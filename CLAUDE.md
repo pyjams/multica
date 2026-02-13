@@ -165,6 +165,25 @@ Fonts are loaded via `@fontsource` packages (not Google Fonts) for cross-platfor
 - Keep animations subtle and purposeful (no gratuitous motion)
 - Test in both light and dark modes
 
+## Debugging: Run Log
+
+The agent engine supports structured run logging for debugging. When enabled, it writes all key execution events to `~/.super-multica/sessions/{sessionId}/run-log.jsonl` alongside the session data.
+
+```bash
+# Enable via environment variable
+MULTICA_RUN_LOG=1 pnpm multica run "your prompt"
+
+# Enable during tests
+MULTICA_RUN_LOG=1 pnpm --filter @multica/core test
+
+# Or programmatically
+const agent = new Agent({ enableRunLog: true });
+```
+
+Logged events: `run_start`, `run_end`, `llm_call`, `llm_result`, `tool_start`, `tool_end`, `context_overflow`, `auth_rotate`, `error_classify`, `preflight_compact_start/end`, `compaction`.
+
+Each line is a JSON object with `ts` (timestamp) and `event` (type), suitable for AI-assisted log analysis. Implementation: `packages/core/src/agent/run-log.ts`.
+
 ## Credentials Setup
 
 ```bash
