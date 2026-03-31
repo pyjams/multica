@@ -53,6 +53,28 @@ function urlTransform(url: string): string {
   return defaultUrlTransform(url)
 }
 
+/**
+ * Convert legacy mention shortcodes [@ id="UUID" label="LABEL"] to markdown
+ * link format [@LABEL](mention://member/UUID) so they render as styled mentions.
+ */
+function preprocessMentionShortcodes(text: string): string {
+  if (!text.includes('[@ ')) return text
+  return text.replace(
+    /\[@\s+([^\]]*)\]/g,
+    (match, attrString: string) => {
+      const attrs: Record<string, string> = {}
+      const re = /(\w+)="([^"]*)"/g
+      let m
+      while ((m = re.exec(attrString)) !== null) {
+        if (m[1] && m[2] !== undefined) attrs[m[1]] = m[2]
+      }
+      const { id, label } = attrs
+      if (!id || !label) return match
+      return `[@${label}](mention://member/${id})`
+    }
+  )
+}
+
 // File path detection regex - matches paths starting with /, ~/, or ./
 const FILE_PATH_REGEX =
   /^(?:\/|~\/|\.\/)[\w\-./@]+\.(?:ts|tsx|js|jsx|mjs|cjs|md|json|yaml|yml|py|go|rs|css|scss|less|html|htm|txt|log|sh|bash|zsh|swift|kt|java|c|cpp|h|hpp|rb|php|xml|toml|ini|cfg|conf|env|sql|graphql|vue|svelte|astro|prisma)$/i
@@ -297,8 +319,11 @@ export function Markdown({
     [mode, onUrlClick, onFileClick]
   )
 
-  // Preprocess to convert raw URLs and file paths to markdown links
-  const processedContent = React.useMemo(() => preprocessLinks(children), [children])
+  // Preprocess: convert mention shortcodes and raw URLs/file paths to markdown links
+  const processedContent = React.useMemo(
+    () => preprocessLinks(preprocessMentionShortcodes(children)),
+    [children]
+  )
 
   return (
     <div className={cn('markdown-content break-words', className)}>
