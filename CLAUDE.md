@@ -34,10 +34,25 @@ Multica is an AI-native task management platform — like Linear, but with AI ag
 
 ### State Management
 
-- **TanStack Query** for all server state. `staleTime: Infinity` — WS events handle cache freshness, no polling.
-- **Zustand** for client-only state. Stores in `@multica/core` hold only client state, zero direct `api.*` calls.
-- **React Context** for `WorkspaceIdProvider` and `NavigationProvider`.
-- Auth/workspace stores use factory pattern with injected dependencies — created by platform layer, registered via `registerAuthStore()` / `registerWorkspaceStore()`.
+The architecture relies on a strict split between server state and client state. Mixing them is the most common way to break it.
+
+- **TanStack Query owns all server state.** Issues, users, workspaces, inbox — anything fetched from the API lives in the Query cache. WS events keep it fresh via invalidation; no polling, no `staleTime` workarounds.
+- **Zustand owns all client state.** UI selections, filters, drafts, modal state, navigation history. Stores live in `packages/core/` (never in `packages/views/`) so both apps share them.
+- **React Context** is reserved for cross-cutting platform plumbing — `WorkspaceIdProvider`, `NavigationProvider`. Don't reach for it for general state.
+- **Auth and workspace stores are the only stores allowed to call `api.*` directly**, because they manage critical state that must exist before queries can run. They're created via factory + injected dependencies, registered by the platform layer.
+
+**Hard rules — these are how the architecture stays coherent:**
+
+- **Never duplicate server data into Zustand.** If it came from the API, it belongs in the Query cache. Copying it into a store creates two sources of truth and they will drift.
+- **Workspace-scoped queries must key on `wsId`.** This is what makes workspace switching automatic — the cache key changes, the right data appears, no manual invalidation needed.
+- **Mutations are optimistic by default.** Apply the change locally, send the request, roll back on failure, invalidate on settle. The user shouldn't wait for the server.
+- **WS events invalidate queries — they never write to stores directly.** This keeps the cache as the single source of truth and avoids race conditions.
+- **Persist what's worth preserving across restarts** (user preferences, drafts, tab layout). **Don't persist ephemeral UI state** (modal open/close, transient selections) or server data.
+
+**Common Zustand footguns to avoid:**
+
+- Selectors must return stable references. Returning a freshly built object or array on every call (e.g. `s => ({ a: s.a, b: s.b })` or `s => s.items.map(...)`) triggers infinite re-renders. Either select primitives separately or use shallow comparison.
+- Hooks that need workspace context should accept `wsId` as a parameter, not call `useWorkspaceId()` internally — this lets them work outside the `WorkspaceIdProvider` (e.g. in a sidebar that renders before workspace is loaded).
 
 ## Commands
 
@@ -82,8 +97,8 @@ pnpm exec playwright test e2e/tests/specific-test.spec.ts
 pnpm --filter @multica/desktop build      # Compile TS → JS (reads .env.production)
 pnpm --filter @multica/desktop package    # Package into .app/.dmg/.exe (current platform only)
 
-# shadcn (monorepo mode — must specify app)
-npx shadcn add badge -c apps/web
+# shadcn — config lives in packages/ui/components.json (Base UI variant, base-nova style)
+pnpm ui:add badge                # Adds component to packages/ui/components/ui/
 
 # Infrastructure
 make db-up            # Start shared PostgreSQL (pgvector/pg17 image)
@@ -118,9 +133,9 @@ make start-worktree     # Start using .env.worktree
 
 These are hard constraints. Violating them breaks the cross-platform architecture:
 
-- `packages/core/` — zero react-dom, zero localStorage (use StorageAdapter), zero process.env, zero UI libraries.
+- `packages/core/` — zero react-dom, zero localStorage (use StorageAdapter), zero process.env, zero UI libraries. **All shared Zustand stores live here**, even view-related ones (filters, view modes) — stores are pure state, not UI.
 - `packages/ui/` — zero `@multica/core` imports (pure UI, no business logic).
-- `packages/views/` — zero `next/*` imports, zero `react-router-dom` imports. Use `NavigationAdapter` for all routing.
+- `packages/views/` — zero `next/*` imports, zero `react-router-dom` imports, zero stores. Use `NavigationAdapter` for all routing.
 - `apps/web/platform/` — the only place for Next.js APIs (`next/navigation`).
 - `apps/desktop/src/renderer/src/platform/` — the only place for react-router-dom navigation wiring.
 
@@ -157,7 +172,7 @@ Both apps share the same CSS foundation from `packages/ui/styles/`.
 
 ## UI/UX Rules
 
-- Prefer shadcn components over custom implementations. Install via `npx shadcn add <component> -c apps/web`.
+- Prefer shadcn components over custom implementations. Install via `pnpm ui:add <component>` from project root — adds to `packages/ui/components/ui/`. All components use Base UI primitives (`@base-ui/react`), not Radix.
 - Use shadcn design tokens for styling. Avoid hardcoded color values.
 - Do not introduce extra state (useState, context, reducers) unless explicitly required by the design.
 - Pay close attention to **overflow** (truncate long text, scrollable containers), **alignment**, and **spacing** consistency.
