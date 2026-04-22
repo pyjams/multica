@@ -10,6 +10,12 @@ files:
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
 asarUnpack:
   - resources/**
+extraResources:
+  - from: "../../../server-lite/dist/${platform}"
+    to: "server-lite"
+    filter:
+      - "server-lite"
+      - "server-lite.exe"
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   target:

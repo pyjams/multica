@@ -1,8 +1,11 @@
 import { app, shell, BrowserWindow } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
+import { startServer, stopServer } from "./server-manager";
 
 let mainWindow: BrowserWindow | null = null;
+let serverURL = process.env["VITE_API_URL"] ?? "http://localhost:8080";
+let wsURL = process.env["VITE_WS_URL"] ?? "ws://localhost:8080/ws";
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -18,6 +21,10 @@ function createWindow(): void {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
       webSecurity: false,
+      additionalArguments: [
+        `--server-url=${serverURL}`,
+        `--ws-url=${wsURL}`,
+      ],
     },
   });
 
@@ -37,12 +44,24 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId("ai.multica.desktop");
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
   });
+
+  // Start embedded server if no explicit API URL is configured
+  if (!process.env["VITE_API_URL"]) {
+    try {
+      const url = await startServer();
+      serverURL = url;
+      wsURL = url.replace("http://", "ws://") + "/ws";
+    } catch (err) {
+      console.error("Failed to start embedded server:", err);
+      // Fall through and let the UI show an error or use default URL
+    }
+  }
 
   createWindow();
 
@@ -52,5 +71,10 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  stopServer();
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  stopServer();
 });
