@@ -238,6 +238,10 @@ export class ApiClient {
     await this.fetch(`/api/issues/${id}`, { method: "DELETE" });
   }
 
+  async runIssue(id: string): Promise<AgentTask> {
+    return this.fetch(`/api/issues/${id}/run`, { method: "POST" });
+  }
+
   async batchUpdateIssues(issueIds: string[], updates: UpdateIssueRequest): Promise<{ updated: number }> {
     return this.fetch("/api/issues/batch-update", {
       method: "POST",

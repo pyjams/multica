@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -411,6 +413,87 @@ func (h *Handler) handleGetIssueUsage(w http.ResponseWriter, r *http.Request) {
 		"total_input_tokens": 0, "total_output_tokens": 0,
 		"total_cache_read_tokens": 0, "total_cache_write_tokens": 0, "task_count": 0,
 	})
+}
+
+// handleRunIssue creates a task for the assigned agent and starts executing it immediately.
+// No daemon needed — the CLI is spawned directly by the server process.
+func (h *Handler) handleRunIssue(w http.ResponseWriter, r *http.Request) {
+	issueID := chi.URLParam(r, "id")
+
+	// Load issue and its assigned agent
+	var agentID, assigneeType sql.NullString
+	var wsID string
+	err := h.db.QueryRowContext(r.Context(),
+		`SELECT workspace_id, assignee_type, assignee_id FROM issues WHERE id = ?`, issueID,
+	).Scan(&wsID, &assigneeType, &agentID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+	if !agentID.Valid || agentID.String == "" || assigneeType.String != "agent" {
+		writeError(w, http.StatusBadRequest, "issue has no agent assigned")
+		return
+	}
+
+	// Check the agent exists and is not archived
+	var runtimeConfigJSON string
+	err = h.db.QueryRowContext(r.Context(),
+		`SELECT runtime_config FROM agents WHERE id = ? AND archived_at IS NULL`, agentID.String,
+	).Scan(&runtimeConfigJSON)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "agent not found or archived")
+		return
+	}
+
+	// Check CLI is reachable before creating the task
+	cfg := resolveRunConfig(runtimeConfigJSON)
+	if _, err := exec.LookPath(cfg.CLI); err != nil {
+		// CLI not found — return a helpful error with env var hints
+		writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
+			"CLI %q not found in PATH. Set CLAUDE_PATH, CODEX_PATH or OPENCODE_PATH env var, "+
+				"or set runtime_config.cli to the full path to the executable.",
+			cfg.CLI,
+		))
+		return
+	}
+
+	// Create the task
+	taskID := newID()
+	ts := now()
+	if _, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO agent_tasks (id, agent_id, runtime_id, issue_id, status, priority, created_at)
+         VALUES (?, ?, 'local', ?, 'running', 0, ?)`,
+		taskID, agentID.String, issueID, ts,
+	); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+
+	// Save the user's prompt (issue context) as the first task message
+	h.db.ExecContext(r.Context(),
+		`INSERT INTO task_messages (id, task_id, role, content, metadata, created_at) VALUES (?, ?, 'user', ?, '{}', ?)`,
+		newID(), taskID, "Running agent on issue: "+issueID, ts,
+	)
+
+	task, _ := h.getTaskByID(taskID)
+
+	// Start execution in the background — no daemon, no polling
+	h.executeTask(taskID, agentID.String, issueID, wsID)
+
+	writeJSON(w, http.StatusCreated, task)
+}
+
+func (h *Handler) getTaskByID(taskID string) (*AgentTask, error) {
+	row := h.db.QueryRowContext(context.Background(),
+		`SELECT id, agent_id, runtime_id, issue_id, status, priority,
+                dispatched_at, started_at, completed_at, result, error, created_at
+         FROM agent_tasks WHERE id = ?`, taskID,
+	)
+	t := scanTask(row)
+	if t == nil {
+		return nil, sql.ErrNoRows
+	}
+	return t, nil
 }
 
 // broadcastEvent sends a WebSocket event to all workspace clients.

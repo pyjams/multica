@@ -311,6 +311,8 @@ func (h *Handler) handleListTasksByIssue(w http.ResponseWriter, r *http.Request)
 
 func (h *Handler) handleCancelTask(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "taskId")
+	// Cancel the running process if any
+	cancelTask(taskID)
 	ts := now()
 	h.db.ExecContext(r.Context(),
 		`UPDATE agent_tasks SET status = 'cancelled', completed_at = ? WHERE id = ?`, ts, taskID,

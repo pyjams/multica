@@ -106,6 +106,7 @@ func newRouter(h *Handler) chi.Router {
 				r.Get("/", h.handleGetIssue)
 				r.Put("/", h.handleUpdateIssue)
 				r.Delete("/", h.handleDeleteIssue)
+				r.Post("/run", h.handleRunIssue) // direct CLI execution — no daemon needed
 				r.Post("/comments", h.handleCreateComment)
 				r.Get("/comments", h.handleListComments)
 				r.Get("/timeline", h.handleListTimeline)
